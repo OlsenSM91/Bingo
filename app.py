@@ -158,7 +158,7 @@ class UpNextWindow(QWidget):
         self.setMinimumSize(250, 300)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    def update_up_next(self, color):
+    def update_up_next(self, color, number):
         color_mapping = {
             'B': 'blue',
             'I': 'red',
@@ -166,11 +166,13 @@ class UpNextWindow(QWidget):
             'G': 'green',
             'O': 'yellow'
         }
-        
-        if color in color_mapping:
+
+        if color in color_mapping and number is not None:
             self.up_next_ball.setStyleSheet(f"font-size: 64px; font-weight: bold; border-radius: 100px; background-color: {color_mapping[color]};")
+            self.up_next_ball.setText(f"{color} {number}")
         else:
             self.up_next_ball.setStyleSheet("font-size: 64px; font-weight: bold; border-radius: 100px; background-color: lightgray;")
+            self.up_next_ball.setText("")
 
 class BallSelectorWindow(QWidget):
     def __init__(self, up_next_window):
@@ -179,6 +181,7 @@ class BallSelectorWindow(QWidget):
         self.selected_balls = set()
         self.up_next_window = up_next_window
         self.next_color = None
+        self.next_number = None
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -200,30 +203,26 @@ class BallSelectorWindow(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def draw_ball(self):
-        # Ensure we pick a valid next color
-        available_colors = [color for color in ['B', 'I', 'N', 'G', 'O'] if self.has_available_balls(color)]
-        if not available_colors:
+        # Ensure we pick a valid next color with available numbers
+        if self.next_color is None or self.next_number is None:
+            self.prepare_next_ball()
+
+        if self.next_color is None or self.next_number is None:
             return None  # No balls left to draw
 
-        if self.next_color is None or self.next_color not in available_colors:
-            self.next_color = random.choice(available_colors)
-
-        col_index = ['B', 'I', 'N', 'G', 'O'].index(self.next_color)
-        color_balls = [num for num in range(1 + col_index * 15, 16 + col_index * 15) if num not in self.selected_balls]
-
-        if not color_balls:
-            return None
-
-        ball = random.choice(color_balls)
+        ball = self.next_number
+        color = self.next_color
         self.selected_balls.add(ball)
+
+        col_index = ['B', 'I', 'N', 'G', 'O'].index(color)
         color_mapping = self.get_color(col_index)
         text_color = 'black' if col_index == 4 else ('black' if col_index == 2 else 'white')
-        ball_label = QLabel(f"{self.next_color} {ball}")
+        ball_label = QLabel(f"{color} {ball}")
         ball_label.setAlignment(Qt.AlignCenter)
         ball_label.setStyleSheet(f"font-size: 24px; font-weight: bold; background-color: {color_mapping}; color: {text_color}; border-radius: 25px; width: 50px; height: 50px;")
 
         # Set the current ball label with larger circle style
-        self.current_ball_label.setText(f"{self.next_color} {ball}")
+        self.current_ball_label.setText(f"{color} {ball}")
         self.current_ball_label.setStyleSheet(f"font-size: 64px; font-weight: bold; border-radius: 100px; background-color: {color_mapping}; color: {text_color}; width: 200px; height: 200px;")
 
         if self.ball_stack.count() >= 5:
@@ -232,12 +231,28 @@ class BallSelectorWindow(QWidget):
         self.ball_stack.insertWidget(0, ball_label)  # Add to the top of the stack
 
         # Prepare the next ball
-        available_colors = [color for color in ['B', 'I', 'N', 'G', 'O'] if self.has_available_balls(color)]
-        if available_colors:
-            self.next_color = random.choice(available_colors)
-            self.up_next_window.update_up_next(self.next_color)
+        self.prepare_next_ball()
 
         return ball
+
+    def prepare_next_ball(self):
+        available_colors = [color for color in ['B', 'I', 'N', 'G', 'O'] if self.has_available_balls(color)]
+        if not available_colors:
+            self.next_color = None
+            self.next_number = None
+            self.up_next_window.update_up_next('lightgray', "")
+            return
+
+        self.next_color = random.choice(available_colors)
+        col_index = ['B', 'I', 'N', 'G', 'O'].index(self.next_color)
+        next_color_balls = [num for num in range(1 + col_index * 15, 16 + col_index * 15) if num not in self.selected_balls]
+        if next_color_balls:  # Check if there are available numbers for the next color
+            self.next_number = random.choice(next_color_balls)
+            self.up_next_window.update_up_next(self.next_color, self.next_number)
+        else:
+            self.next_color = None
+            self.next_number = None
+            self.up_next_window.update_up_next('lightgray', "")
 
     def has_available_balls(self, color):
         col_index = ['B', 'I', 'N', 'G', 'O'].index(color)
@@ -254,7 +269,9 @@ class BallSelectorWindow(QWidget):
         self.current_ball_label.setStyleSheet("font-size: 64px; font-weight: bold; border-radius: 100px; background-color: lightgray; width: 200px; height: 200px;")
         for i in reversed(range(self.ball_stack.count())):
             self.ball_stack.itemAt(i).widget().deleteLater()
-        self.up_next_window.update_up_next('lightgray')  # Reset up next window
+        self.up_next_window.update_up_next('lightgray', "")  # Reset up next window
+        self.next_color = None
+        self.next_number = None
 
     def handle_manual_selection(self, ball):
         self.selected_balls.add(ball)
